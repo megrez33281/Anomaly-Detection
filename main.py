@@ -7,6 +7,7 @@ from UNet_Autoencoder_Model import UNetAutoencoder
 from Evaluation import *
 from sklearn.metrics import roc_auc_score
 from Dataset import GenerateDataset
+import numpy as np
 
 # 設定整體隨機種子
 set_seed(Config.SEED)
@@ -63,22 +64,23 @@ if __name__ == "__main__":
         val_labels = []
 
         with torch.no_grad(): # 不計算梯度，節省記憶體
-            for images, labels in tqdm(val_loader, desc=f"Epoch {epoch+1}/{Config.EPOCHS} [Val]"): # 遍歷驗證集val_loader
+            model.eval()
+            val_scores, val_labels = [], []
+            for images, labels in tqdm(val_loader):  # 遍歷驗證集val_loader
                 inputs = images.to(Config.DEVICE) # 把影像搬到指定的Device（GPU或CPU）
-                labels = labels.numpy()
-
                 # 重建影像
                 outputs = model(inputs)
 
                 # 用設定好的Loss Function作為anomaly 分數
-                batch_scores = criterion(outputs, inputs, reduction='none').cpu().numpy()
-                
+                loss_per_image = criterion(outputs, inputs, reduction='none').detach().cpu().numpy()
                 # 把這一batch的每張圖片的anomaly 分數以及該圖片的真實類別val_scores, val_labels
-                val_scores.extend(batch_scores)
-                val_labels.extend(labels)
+                val_scores.extend(loss_per_image)
+                val_labels.extend(labels.numpy())
 
-        # --- 計算 AUROC ---
-        val_auroc = roc_auc_score(val_labels, val_scores) # 模型在不同threshold下的表現
+        val_scores = np.asarray(val_scores)
+        val_labels = np.asarray(val_labels)
+
+        val_auroc = roc_auc_score(val_labels, val_scores)
         print(f"Epoch [{epoch+1}/{Config.EPOCHS}], Avg Train Loss: {avg_train_loss:.4f}, Validation AUROC: {val_auroc:.4f}")
 
         # 若AUROC提升（面積越大越好）則儲存模型

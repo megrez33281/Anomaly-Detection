@@ -38,4 +38,4 @@ class Config:
     EPOCHS = 10             
     
     # 損失函數權重 (SSIM + MSE)
-    SSIM_WEIGHT = 0.84
+    SSIM_WEIGHT = 0.1

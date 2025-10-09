@@ -1,11 +1,13 @@
 from PIL import Image
 from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms
 import glob
 import os
 from sklearn.model_selection import train_test_split
 from Config import Config
 from Evaluation import *
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+import numpy as np
 
 
 # -----------------------------
@@ -23,16 +25,22 @@ class AnomalyDataset(Dataset):
 
     def __getitem__(self, idx):
         img_path = self.image_paths[idx]
-        image = Image.open(img_path).convert("RGB")
+        # PIL讀取影像，並轉換為Numpy array，以供albumentations使用
+        image = np.array(Image.open(img_path).convert("RGB"))
         
         label = 0  # 預設為正常
         if self.label_transform:
             # 如果有label_transform，就會先用label_transform將其轉換成異常圖片
-            image = self.label_transform(image)  # 套用異常變換
+            # 此處的label_transform仍作用於PIL Image，因此需先轉回PIL
+            pil_image = Image.fromarray(image)
+            pil_image = self.label_transform(pil_image)
+            image = np.array(pil_image)
             label = 1  # 標記為異常
 
         if self.transform:
-            image = self.transform(image)
+            # 套用albumentations的轉換
+            augmented = self.transform(image=image)
+            image = augmented['image']
             
         return image, label
     
@@ -45,21 +53,26 @@ def GenerateDataset():
     print(f"Training set size: {len(train_paths)}")
     print(f"Validation set size: {len(val_paths)}")
 
-    # --- 定義影像轉換（訓練或驗證資料的處理流程） ---
-    train_transform = transforms.Compose([
-        # 隨機裁剪一個區域，然後縮放到指定大小 Config.IMG_SIZE × Config.IMG_SIZE
-        transforms.RandomResizedCrop(size=Config.IMG_SIZE, scale=(0.8, 1.0)),
-        # 將像素值從[0, 255]映射到[0.0, 1.0]，shape會變成[channel, H, W]
-        transforms.ToTensor(),
+    # --- 定義影像轉換（albumentations） ---
+    # 訓練資料增強：使用 Cutout (CoarseDropout 的前身)
+    train_transform = A.Compose([
+        # 隨機裁剪一個區域，然後縮放到指定大小
+        A.RandomResizedCrop(size=(Config.IMG_SIZE, Config.IMG_SIZE), scale=(0.8, 1.0)),
+        # GridDropout：網格狀地挖掉一些區域，強迫模型學習紋理
+        A.GridDropout(ratio=0.5, p=0.5),
+        # 將像素值從[0, 255]映射到[0.0, 1.0]，並轉換為Tensor
+        A.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0)), # 僅做歸一化
+        ToTensorV2(),
     ])
 
-    val_transform = transforms.Compose([
-        # 直接縮放圖片至指定大小並轉換成Tensor格式
-        transforms.Resize((Config.IMG_SIZE, Config.IMG_SIZE)),
-        transforms.ToTensor(),
+    # 驗證資料轉換：僅縮放與轉換為Tensor
+    val_transform = A.Compose([
+        A.Resize(height=Config.IMG_SIZE, width=Config.IMG_SIZE),
+        A.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0)),
+        ToTensorV2(),
     ])
 
-    # 生成異常樣本
+    # 生成異常樣本的轉換 (CutPaste)
     cutpaste_transform = CutPaste()  
 
     # --- 建立 Dataset 與 DataLoader ---

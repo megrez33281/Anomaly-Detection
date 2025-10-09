@@ -1,4 +1,3 @@
-
 import random
 import torch.nn.functional as F
 import torch.nn as nn
@@ -65,49 +64,43 @@ def ssim(img1, img2, window, window_size, channel, size_average=True):
         return ssim_map.mean([1, 2, 3])
 
 class CombinedLoss(nn.Module):
-    """
-    結合MSE與SSIM的損失函數
-    ssim_weight控制兩者比例
-    """
-    def __init__(self, ssim_weight=0.84, window_size=11, channels=3):
-        super(CombinedLoss, self).__init__()
+    def __init__(self, ssim_weight=0.5, window_size=11):
+        super().__init__()
+        self.mse = nn.MSELoss(reduction='none')
         self.ssim_weight = ssim_weight
-        self.mse_loss_avg = nn.MSELoss()
-        self.mse_loss_none = nn.MSELoss(reduction='none')
         self.window_size = window_size
-        self.channels = channels
+        self.window = None  # 之後在 forward 建立或搬到裝置
 
-        # 預先建立 SSIM window，避免重複生成
-        window = self.create_window(window_size, channels)
-        self.register_buffer('window', window)
-
-    def create_window(self, window_size, channel):
+    def create_window(self, window_size, channel, device):
         """建立Gaussian權重窗口"""
         # 設置滑動窗口的權重
         _1D_window = torch.exp(-(torch.arange(window_size) - window_size // 2)**2 / (2 * 1.5**2)).float()
         _2D_window = _1D_window.unsqueeze(1) @ _1D_window.unsqueeze(0)
         window = _2D_window.expand(channel, 1, window_size, window_size).contiguous()
-        return window
+        return window.to(device)
 
-    def forward(self, output, target, reduction='mean'):
+    def forward(self, recon, target, reduction='mean'):
         # output：模型輸出（重建的圖像）
         # target：真實圖像
         # output和target的維度皆為[batch, channel, H, W]，代表的是一個batch的圖片
+        mse_loss = self.mse(recon, target)
+
+        # 建立window (第一次 forward 或裝置不同時)
+        if (self.window is None) or (self.window.device != recon.device) or (self.window.size(0) != recon.size(1)):
+            self.window = self.create_window(self.window_size, recon.size(1), recon.device)
+
+        ssim_val = ssim(recon, target, window=self.window, window_size=self.window_size, channel=recon.size(1), size_average=False)
+        # ssim_loss 越大代表越不相似
+        ssim_loss = 1 - ssim_val
+
+        # broadcast ssim_loss to match shape
+        ssim_loss = ssim_loss.view(-1, 1, 1, 1)
+        total_loss = (1 - self.ssim_weight) * mse_loss + self.ssim_weight * ssim_loss
+
         if reduction == 'mean':
-            # 平均化損失
-            mse = self.mse_loss_avg(output, target)
-            #　此處ssim的設計允許一此處理一批圖片，在means時會選擇將最後的ssim結果取平均
-            ssim_val = ssim(output, target, window=self.window, window_size=self.window_size, channel=self.channels, size_average=True)
-            ssim_loss = 1 - ssim_val #這裡是一個純量
-            # combined_loss = (1 - α) * MSE + α * (1 - SSIM)（以純量的形式）
-            combined_loss = (1 - self.ssim_weight) * mse + self.ssim_weight * ssim_loss
-            return combined_loss # 訓練時整體損失
+            return total_loss.mean()
         elif reduction == 'none':
-            # 每張圖片分別計算
-            mse_none = self.mse_loss_none(output, target).mean([1, 2, 3])
-            ssim_none = ssim(output, target, window=self.window, window_size=self.window_size, channel=self.channels, size_average=False)
-            # combined_loss = (1 - α) * MSE + α * (1 - SSIM)（以array的形式）
-            ssim_loss_none = 1 - ssim_none # 這裡是一個向量
-            return (1 - self.ssim_weight) * mse_none + self.ssim_weight * ssim_loss_none  # 每張圖的損失/異常分數
+            # 每張圖一個 loss
+            return total_loss.view(total_loss.size(0), -1).mean(dim=1)
         else:
-            raise ValueError(f"Invalid reduction type: {reduction}")
+            raise ValueError("Unsupported reduction type")

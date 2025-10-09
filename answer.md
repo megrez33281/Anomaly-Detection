@@ -32,6 +32,13 @@
 
 總結來說，對於異常檢測這種樣本不平衡且關心異常排序的任務，AUC 提供了一個更全面、更穩定且與閾值選擇無關的評估，比 F1 分數更能反映模型的真實性能。
 
+F1-score是精確率(Precision)和召回率(Recall)的調和平均數  
+精確率(Precision)代表的是所有被認為是正類的樣本(異常樣本)有多少是真正的正類
+召回率(Recall)代表的是所有正類樣本中又多少被抓出來
+
+
+
+
 ---
 
 ### Q3. Discuss the difference between semi-supervised learning and unsupervised learning.
