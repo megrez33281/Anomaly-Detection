@@ -86,7 +86,7 @@ AUCROC一值卡在0.5左右就是一個很好的證明，模型將所有輸入�
 2.  **發現**
     腳本執行後，將原始影像與重建影像進行了對比  
     結果完全印證了先前的猜測：**無論輸入是什麼類別的物體，模型都只會輸出一張模糊、無法辨識的通用影像**  
-    *左：原始影像 / 右：模型重建結果*
+    *左：原始影像 / 右：模型重建結果*  
     ![Reconstruction Result](reconstruction_results/compare_222.png)
     ![Reconstruction Result](reconstruction_results/compare_154.png)
     ![Reconstruction Result](reconstruction_results/compare_587.png)
