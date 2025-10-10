@@ -75,3 +75,16 @@ class UNetAutoencoder(nn.Module):
         # 輸出範圍 [0,1]
         output = self.activation(self.out_conv(d1))
         return output
+
+    def encode(self, x):
+        """僅使用編碼器部分，提取影像特徵"""
+        e1 = self.enc1(x)
+        p1 = self.pool(e1)
+        e2 = self.enc2(p1)
+        p2 = self.pool(e2)
+        e3 = self.enc3(p2)
+        p3 = self.pool(e3)
+        e4 = self.enc4(p3)
+        p4 = self.pool(e4)
+        b = self.bottleneck(p4)
+        return b

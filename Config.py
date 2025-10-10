@@ -28,6 +28,8 @@ class Config:
     DATA_DIR = os.path.join(ROOT_DIR, "Dataset", "Dataset") # 還原路徑，指向巢狀的 Dataset 層
     CHECKPOINT_DIR = os.path.join(ROOT_DIR, "epoch_checkpoints") # 新增：儲存每個 epoch 權重的資料夾
     MODEL_SAVE_PATH = os.path.join(ROOT_DIR, f"best_model_{{TARGET_CLASS}}.pth") # 加回：正常模式下儲存最佳模型路徑
+    TRAIN_DIR = os.path.join(DATA_DIR, "train")
+    TEST_DIR = os.path.join(DATA_DIR, "test")
     TARGET_CLASS = "地毯"  # <--- 指定要訓練的單一類別
 
     # 訓練模式
