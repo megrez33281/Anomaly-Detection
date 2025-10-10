@@ -47,18 +47,12 @@ class AnomalyDataset(Dataset):
 
 
 def GenerateDataset():
-    # --- 根據 Config.py 中的字典載入特定類別的圖片路徑 ---
-    class_mapping = Config.CLASS_FILENAME_MAPPING
-    target_class_files = class_mapping.get(Config.TARGET_CLASS)
-    if not target_class_files:
-        raise ValueError(f"Target class '{Config.TARGET_CLASS}' not found in mapping dictionary.")
-
-    flat_train_dir = os.path.join(Config.DATA_DIR, "train")
-    all_image_paths = [os.path.join(flat_train_dir, f"{file_id}.png") for file_id in target_class_files]
+    # 載入與分割資料（此處型態仍是路徑）
+    all_image_paths = sorted(glob.glob(os.path.join(Config.TRAIN_DIR, "*.png")), key=lambda x: int(os.path.splitext(os.path.basename(x))[0]))
+    train_paths, val_paths = train_test_split(all_image_paths, test_size=0.1, random_state=Config.SEED)
 
     # 載入與分割資料
     train_paths, val_paths = train_test_split(all_image_paths, test_size=0.2, random_state=Config.SEED)
-    print(f"Target Class: {Config.TARGET_CLASS}")
     print(f"Training set size: {len(train_paths)}")
     print(f"Validation set size: {len(val_paths)}")
 
@@ -76,16 +70,10 @@ def GenerateDataset():
         ToTensorV2(),
     ])
 
-    # --- 根據類別選擇驗證策略 ---
-    TEXTURE_CLASSES = ['地毯', '皮革', '木板', '磁磚', '鐵網']
-    OBJECT_CLASSES = ['拉鍊', '螺絲', '螺母', '瓶子', '藥片', '膠囊', '榛果', '電晶體', '電纜', '牙刷']
 
-    if Config.TARGET_CLASS in TEXTURE_CLASSES:
-        print("Validation Strategy: TextureDamage (for texture class)")
-        anomaly_transform = TextureDamage()
-    else:
-        print("Validation Strategy: CutPaste (for object class)")
-        anomaly_transform = CutPaste()
+
+    print("Validation Strategy: CutPaste (for object class)")
+    anomaly_transform = CutPaste()
 
     # --- 建立 Dataset 與 DataLoader ---
     train_dataset = AnomalyDataset(image_paths=train_paths, transform=train_transform)

@@ -28,13 +28,13 @@ class Config:
     DATA_DIR = os.path.join(ROOT_DIR, "Dataset", "Dataset") # 還原路徑，指向巢狀的 Dataset 層
     CHECKPOINT_DIR = os.path.join(ROOT_DIR, "epoch_checkpoints")
     BEST_MODEL_DIR = os.path.join(ROOT_DIR, "best_model") # 存放所有類別最佳模型的資料夾
-    MODEL_SAVE_PATH = os.path.join(BEST_MODEL_DIR, f"best_model_{{TARGET_CLASS}}.pth") # 正常模式下儲存最佳模型路徑
+    MODEL_SAVE_PATH = os.path.join(BEST_MODEL_DIR, "best_model_unified.pth") # 統一模型的儲存路徑
     TRAIN_DIR = os.path.join(DATA_DIR, "train")
     TEST_DIR = os.path.join(DATA_DIR, "test")
-    TARGET_CLASS = "地毯"  # <--- 指定要訓練的單一類別
+    # TARGET_CLASS = "地毯"  # <-- 已棄用，改為訓練單一全類別模型
 
     # 訓練模式
-    DEBUG_MODE = False # True: 儲存所有 epoch 權重; False: 只儲存最佳 AUROC 權重
+    DEBUG_MODE = True # True: 儲存所有 epoch 權重; False: 只儲存最佳 AUROC 權重
     
     # 訓練超參數
     IMG_SIZE = 256          # 圖片輸入大小
