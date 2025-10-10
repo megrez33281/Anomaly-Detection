@@ -1,3 +1,4 @@
+from PIL import Image
 import random
 import torch.nn.functional as F
 import torch.nn as nn
@@ -6,6 +7,9 @@ import torch
 # -----------------------------
 # CutPaste製作異常資料
 # -----------------------------
+import numpy as np
+import albumentations as A
+
 class CutPaste(object):
     """實作 CutPaste 增強：隨機剪下一塊貼回其他區域，模擬瑕疵圖片"""
     def __init__(self, patch_size_ratio_range=(0.05, 0.15)):
@@ -33,6 +37,28 @@ class CutPaste(object):
         image.paste(patch, (dest_x, dest_y))
         
         return image
+
+class TextureDamage(object):
+    """實作紋理破壞增強：使用 CoarseDropout 在圖像上挖洞，模擬紋理瑕疵"""
+    def __init__(self):
+        self.transform = A.Compose([
+            A.CoarseDropout(
+                num_holes_range=(10, 20),
+                hole_height_range=(0.05, 0.1),
+                hole_width_range=(0.05, 0.1),
+                fill=0,
+                p=1.0
+            )
+        ])
+
+    def __call__(self, image):
+        # 將 PIL Image 轉換為 numpy array 以便 albumentations 處理
+        np_image = np.array(image)
+        # 套用 CoarseDropout
+        augmented_image = self.transform(image=np_image)['image']
+        # 將處理後的 numpy array 轉回 PIL Image
+        return Image.fromarray(augmented_image)
+
     
 # ============================================================
 # 結構相似度 SSIM + 損失函數組合

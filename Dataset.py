@@ -47,41 +47,52 @@ class AnomalyDataset(Dataset):
 
 
 def GenerateDataset():
-    # 載入與分割資料（此處型態仍是路徑）
-    all_image_paths = sorted(glob.glob(os.path.join(Config.TRAIN_DIR, "*.png")), key=lambda x: int(os.path.splitext(os.path.basename(x))[0]))
-    train_paths, val_paths = train_test_split(all_image_paths, test_size=0.1, random_state=Config.SEED)
+    # --- 根據 Config.py 中的字典載入特定類別的圖片路徑 ---
+    class_mapping = Config.CLASS_FILENAME_MAPPING
+    target_class_files = class_mapping.get(Config.TARGET_CLASS)
+    if not target_class_files:
+        raise ValueError(f"Target class '{Config.TARGET_CLASS}' not found in mapping dictionary.")
+
+    flat_train_dir = os.path.join(Config.DATA_DIR, "train")
+    all_image_paths = [os.path.join(flat_train_dir, f"{file_id}.png") for file_id in target_class_files]
+
+    # 載入與分割資料
+    train_paths, val_paths = train_test_split(all_image_paths, test_size=0.2, random_state=Config.SEED)
+    print(f"Target Class: {Config.TARGET_CLASS}")
     print(f"Training set size: {len(train_paths)}")
     print(f"Validation set size: {len(val_paths)}")
 
     # --- 定義影像轉換（albumentations） ---
-    # 訓練資料增強：使用 Cutout (CoarseDropout 的前身)
     train_transform = A.Compose([
-        # 隨機裁剪一個區域，然後縮放到指定大小
         A.RandomResizedCrop(size=(Config.IMG_SIZE, Config.IMG_SIZE), scale=(0.8, 1.0)),
-        # GridDropout：網格狀地挖掉一些區域，強迫模型學習紋理
         A.GridDropout(ratio=0.5, p=0.5),
-        # 將像素值從[0, 255]映射到[0.0, 1.0]，並轉換為Tensor
-        A.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0)), # 僅做歸一化
+        A.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0)),
         ToTensorV2(),
     ])
 
-    # 驗證資料轉換：僅縮放與轉換為Tensor
     val_transform = A.Compose([
         A.Resize(height=Config.IMG_SIZE, width=Config.IMG_SIZE),
         A.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0)),
         ToTensorV2(),
     ])
 
-    # 生成異常樣本的轉換 (CutPaste)
-    cutpaste_transform = CutPaste()  
+    # --- 根據類別選擇驗證策略 ---
+    TEXTURE_CLASSES = ['地毯', '皮革', '木板', '磁磚', '鐵網']
+    OBJECT_CLASSES = ['拉鍊', '螺絲', '螺母', '瓶子', '藥片', '膠囊', '榛果', '電晶體', '電纜', '牙刷']
+
+    if Config.TARGET_CLASS in TEXTURE_CLASSES:
+        print("Validation Strategy: TextureDamage (for texture class)")
+        anomaly_transform = TextureDamage()
+    else:
+        print("Validation Strategy: CutPaste (for object class)")
+        anomaly_transform = CutPaste()
 
     # --- 建立 Dataset 與 DataLoader ---
     train_dataset = AnomalyDataset(image_paths=train_paths, transform=train_transform)
     train_loader = DataLoader(train_dataset, batch_size=Config.BATCH_SIZE, shuffle=True, num_workers=0)
 
-    # 驗證集：一半正常、一半CutPaste製造的異常
     val_normal_dataset = AnomalyDataset(image_paths=val_paths, transform=val_transform)
-    val_anomaly_dataset = AnomalyDataset(image_paths=val_paths, transform=val_transform, label_transform=cutpaste_transform)
+    val_anomaly_dataset = AnomalyDataset(image_paths=val_paths, transform=val_transform, label_transform=anomaly_transform)
     val_dataset = torch.utils.data.ConcatDataset([val_normal_dataset, val_anomaly_dataset])
     val_loader = DataLoader(val_dataset, batch_size=Config.BATCH_SIZE, shuffle=False, num_workers=0)
 

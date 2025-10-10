@@ -1,49 +1,61 @@
 Using device: cuda
-Training set size: 3266
-Validation set size: 363
+Target Class: 地毯
+Training set size: 224
+Validation set size: 56
+Validation Strategy: TextureDamage (for texture class)
 Starting full training and validation pipeline...
-Epoch 1/10 [Train]: 100%|██████████| 103/103 [09:44<00:00,  5.67s/it]
-Epoch 1/10 [Val]: 100%|██████████| 23/23 [01:05<00:00,  2.84s/it]
 
------ DEBUG INFO FOR EPOCH 1 -----
-DEBUG: len(scores)=726, len(labels)=726
-DEBUG: labels unique and counts: (array([0, 1]), array([363, 363]))
-DEBUG: scores min/mean/median/max: 0.0097/0.0901/0.0683/0.2263
-  -> class 0: count=363, mean_score=0.090151, std=0.061573
-  -> class 1: count=363, mean_score=0.090127, std=0.061552
-ROC AUC (as-is): 0.5001
--------------------------------------
+Epoch 1/30 [Train]:   0%|          | 0/7 [00:00<?, ?it/s]
+Epoch 1/30 [Train]:  14%|█▍        | 1/7 [00:05<00:33,  5.51s/it]
+Epoch 1/30 [Train]:  29%|██▊       | 2/7 [00:10<00:26,  5.28s/it]
+Epoch 1/30 [Train]:  43%|████▎     | 3/7 [00:15<00:20,  5.24s/it]
+Epoch 1/30 [Train]:  57%|█████▋    | 4/7 [00:21<00:15,  5.23s/it]
+Epoch 1/30 [Train]:  71%|███████▏  | 5/7 [00:26<00:10,  5.18s/it]
+Epoch 1/30 [Train]:  86%|████████▌ | 6/7 [00:31<00:05,  5.19s/it]
+Epoch 1/30 [Train]: 100%|██████████| 7/7 [00:36<00:00,  5.19s/it]
+Epoch 1/30 [Train]: 100%|██████████| 7/7 [00:36<00:00,  5.22s/it]
 
-Epoch [1/10], Avg Train Loss: 0.1053, Validation AUROC: 0.5001
-  -> New best AUROC: 0.5001. Model saved to /content/drive/.shortcut-targets-by-id/1FEsGkEhuronAlMaX3N9jAQghkPI1A604/Anomaly_Detection/best_model_auroc.pth
-Epoch 2/10 [Train]: 100%|██████████| 103/103 [04:29<00:00,  2.62s/it]
-Epoch 2/10 [Val]: 100%|██████████| 23/23 [00:39<00:00,  1.73s/it]
+  0%|          | 0/4 [00:00<?, ?it/s]
+ 25%|██▌       | 1/4 [00:01<00:03,  1.27s/it]
+ 50%|█████     | 2/4 [00:02<00:02,  1.30s/it]
+ 75%|███████▌  | 3/4 [00:04<00:01,  1.37s/it]
+100%|██████████| 4/4 [00:04<00:00,  1.08s/it]
+100%|██████████| 4/4 [00:04<00:00,  1.17s/it]
+Epoch [1/30], Avg Train Loss: 0.0869, Validation AUROC: 1.0000
+  -> New best AUROC: 1.0000. Model saved to c:\齊齊\交大\課程\資料探勘\作業\作業二：Anomaly Detection\best_model_地毯.pth
 
------ DEBUG INFO FOR EPOCH 2 -----
-DEBUG: len(scores)=726, len(labels)=726
-DEBUG: labels unique and counts: (array([0, 1]), array([363, 363]))
-DEBUG: scores min/mean/median/max: 0.0110/0.0881/0.0715/0.2096
-  -> class 0: count=363, mean_score=0.088131, std=0.058487
-  -> class 1: count=363, mean_score=0.088069, std=0.058396
-ROC AUC (as-is): 0.4996
-ROC AUC (inverted scores): 0.5004
-NOTE: Scores might be inverted. Higher score may mean more normal.
--------------------------------------
+Epoch 2/30 [Train]:   0%|          | 0/7 [00:00<?, ?it/s]
+Epoch 2/30 [Train]:  14%|█▍        | 1/7 [00:05<00:31,  5.21s/it]
+Epoch 2/30 [Train]:  29%|██▊       | 2/7 [00:10<00:27,  5.45s/it]
+Epoch 2/30 [Train]:  43%|████▎     | 3/7 [00:16<00:21,  5.35s/it]
+Epoch 2/30 [Train]:  57%|█████▋    | 4/7 [00:21<00:15,  5.25s/it]
+Epoch 2/30 [Train]:  71%|███████▏  | 5/7 [00:26<00:10,  5.26s/it]
+Epoch 2/30 [Train]:  86%|████████▌ | 6/7 [00:31<00:05,  5.24s/it]
+Epoch 2/30 [Train]: 100%|██████████| 7/7 [00:36<00:00,  5.23s/it]
+Epoch 2/30 [Train]: 100%|██████████| 7/7 [00:36<00:00,  5.26s/it]
 
-Epoch [2/10], Avg Train Loss: 0.0978, Validation AUROC: 0.4996
-Epoch 3/10 [Train]: 100%|██████████| 103/103 [04:23<00:00,  2.56s/it]
-Epoch 3/10 [Val]: 100%|██████████| 23/23 [00:39<00:00,  1.73s/it]
+  0%|          | 0/4 [00:00<?, ?it/s]
+ 25%|██▌       | 1/4 [00:01<00:03,  1.28s/it]
+ 50%|█████     | 2/4 [00:02<00:02,  1.30s/it]
+ 75%|███████▌  | 3/4 [00:04<00:01,  1.37s/it]
+100%|██████████| 4/4 [00:04<00:00,  1.09s/it]
+100%|██████████| 4/4 [00:04<00:00,  1.17s/it]
+Epoch [2/30], Avg Train Loss: 0.0838, Validation AUROC: 1.0000
 
------ DEBUG INFO FOR EPOCH 3 -----
-DEBUG: len(scores)=726, len(labels)=726
-DEBUG: labels unique and counts: (array([0, 1]), array([363, 363]))
-DEBUG: scores min/mean/median/max: 0.0099/0.0902/0.0682/0.2256
-  -> class 0: count=363, mean_score=0.090157, std=0.061612
-  -> class 1: count=363, mean_score=0.090149, std=0.061675
-ROC AUC (as-is): 0.5000
-ROC AUC (inverted scores): 0.5000
-NOTE: Scores might be inverted. Higher score may mean more normal.
--------------------------------------
+Epoch 3/30 [Train]:   0%|          | 0/7 [00:00<?, ?it/s]
+Epoch 3/30 [Train]:  14%|█▍        | 1/7 [00:05<00:30,  5.10s/it]
+Epoch 3/30 [Train]:  29%|██▊       | 2/7 [00:10<00:25,  5.16s/it]
+Epoch 3/30 [Train]:  43%|████▎     | 3/7 [00:15<00:20,  5.18s/it]
+Epoch 3/30 [Train]:  57%|█████▋    | 4/7 [00:20<00:15,  5.18s/it]
+Epoch 3/30 [Train]:  71%|███████▏  | 5/7 [00:25<00:10,  5.15s/it]
+Epoch 3/30 [Train]:  86%|████████▌ | 6/7 [00:30<00:05,  5.17s/it]
+Epoch 3/30 [Train]: 100%|██████████| 7/7 [00:36<00:00,  5.18s/it]
+Epoch 3/30 [Train]: 100%|██████████| 7/7 [00:36<00:00,  5.17s/it]
 
-Epoch [3/10], Avg Train Loss: 0.0981, Validation AUROC: 0.5000
-Epoch 4/10 [Train]:  89%|████████▉ | 92/103 [03:55<00:28,  2.55s/it]
+  0%|          | 0/4 [00:00<?, ?it/s]
+ 25%|██▌       | 1/4 [00:01<00:03,  1.26s/it]
+ 50%|█████     | 2/4 [00:02<00:02,  1.29s/it]
+ 75%|███████▌  | 3/4 [00:04<00:01,  1.44s/it]
+100%|██████████| 4/4 [00:04<00:00,  1.13s/it]
+100%|██████████| 4/4 [00:04<00:00,  1.21s/it]
+Epoch [3/30], Avg Train Loss: 0.0812, Validation AUROC: 1.0000
