@@ -59,14 +59,13 @@ def GenerateDataset():
     # --- 定義影像轉換（albumentations） ---
     train_transform = A.Compose([
         A.RandomResizedCrop(size=(Config.IMG_SIZE, Config.IMG_SIZE), scale=(0.8, 1.0)),
-        A.GridDropout(ratio=0.5, p=0.5),
-        A.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0)),
+        A.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
         ToTensorV2(),
     ])
 
     val_transform = A.Compose([
         A.Resize(height=Config.IMG_SIZE, width=Config.IMG_SIZE),
-        A.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0)),
+        A.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
         ToTensorV2(),
     ])
 

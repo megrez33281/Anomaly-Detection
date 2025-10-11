@@ -20,7 +20,10 @@ def visualize_epoch_reconstruction():
     # 1. 找到所有 epoch 權重檔案
     checkpoint_dir = Config.CHECKPOINT_DIR
     # 排序權重檔案，確保按 epoch 1, 2, 3... 的順序處理
-    checkpoints = [os.path.join(checkpoint_dir, "model_epoch_1.pth")]
+    checkpoints = sorted(
+        glob.glob(os.path.join(checkpoint_dir, "*.pth")), 
+        key=lambda x: int(os.path.splitext(os.path.basename(x).split('_')[-1])[0])
+    )
     
     if not checkpoints:
         print(f"錯誤：在 '{checkpoint_dir}' 中找不到任何權重檔案。")

@@ -90,7 +90,7 @@ def ssim(img1, img2, window, window_size, channel, size_average=True):
         return ssim_map.mean([1, 2, 3])
 
 class CombinedLoss(nn.Module):
-    def __init__(self, ssim_weight=0.5, window_size=11):
+    def __init__(self, ssim_weight=0.2, window_size=11):
         super().__init__()
         self.mse = nn.MSELoss(reduction='none')
         self.ssim_weight = ssim_weight

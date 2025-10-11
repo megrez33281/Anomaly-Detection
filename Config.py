@@ -39,10 +39,10 @@ class Config:
     # 訓練超參數
     IMG_SIZE = 256          # 圖片輸入大小
     PIXEL_CLASSIFY_IMG_SIZE = 512 # 像素級分類測試用的圖片大小
-    BATCH_SIZE = 32
+    BATCH_SIZE = 16
     LEARNING_RATE = 1e-4
     WEIGHT_DECAY = 1e-5
-    EPOCHS = 30             
+    EPOCHS = 5             
     
     # 損失函數權重 (SSIM + MSE)
     SSIM_WEIGHT = 0.1
