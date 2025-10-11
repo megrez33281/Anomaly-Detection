@@ -2,173 +2,107 @@ import torch
 import numpy as np
 import os
 import glob
-import shutil
-from PIL import Image
 from tqdm import tqdm
+from PIL import Image
 from sklearn.cluster import KMeans
+import joblib
 
 from Config import Config, set_seed
 from UNet_Autoencoder_Model import UNetAutoencoder
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
-# --- Helper Functions ---
-def calculate_histogram(image_tensor, bins=32):
-    """計算 RGB 圖像的顏色直方圖"""
-    image_tensor = image_tensor * 255
-    hists = [torch.histc(channel, bins=bins, min=0, max=255) for channel in image_tensor]
-    hist = torch.cat(hists)
-    hist = hist / torch.sum(hist)
-    return hist
-
-def chi_squared_distance(hist1, hist2):
-    """計算兩個直方圖之間的卡方距離"""
-    epsilon = 1e-10
-    return torch.sum((hist1 - hist2)**2 / (hist1 + hist2 + epsilon))
-
-def final_analysis_pipeline():
+def extract_features(epoch, model, device):
     """
-    執行最終的、分層的分析流程：
-    1. 混合分類法：使用像素+直方圖法對測試集進行初步分類。
-    2. 模型計分：對每個分類後的組，使用對應的類別模型計算異常分數。
-    3. 動態閾值：在每個組內，根據頭部樣本的平均跳躍幅度，動態尋找閾值。
-    4. 結果歸檔：將圖片複製到對應的 normal/abnormal 資料夾。
+    使用給定的模型為所有訓練樣本提取特徵。
+    返回特徵和對應的路徑，全部保留在記憶體中。
     """
-    set_seed(Config.SEED)
-    device = Config.DEVICE
+    print(f"--- 步驟 1: 為 Epoch {epoch} 提取特徵 ---")
     
-    # --- Constants ---
-    BINS = 32
-    JUMP_SENSITIVITY_MULTIPLIER = 5.0 # 一次性跳躍多少倍的前幾名平均的MIN_SAMPLES_FOR_THRESHOLD才開始算做異常
-    MIN_SAMPLES_FOR_THRESHOLD = 21 # 至少需要21個樣本才能計算前20個的跳躍
-    CLASSIFY_IMG_SIZE = Config.PIXEL_CLASSIFY_IMG_SIZE
-    SCORING_IMG_SIZE = Config.IMG_SIZE
+    transform = A.Compose([
+        A.Resize(height=Config.IMG_SIZE, width=Config.IMG_SIZE),
+        A.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0)),
+        ToTensorV2(),
+    ])
+    
+    all_image_paths = sorted(glob.glob(os.path.join(Config.TRAIN_DIR, "*.png")), key=lambda x: int(os.path.splitext(os.path.basename(x))[0]))
 
-    # --- Part 1: Load all assets ---
-    print("--- Part 1: Loading all models and feature libraries ---")
-    try:
-        all_feature_data = torch.load('feature_libraries_all.pt', map_location=torch.device('cpu'))
-    except FileNotFoundError:
-        print("錯誤：找不到 'feature_libraries_all.pt'。請先執行 create_feature_library.py。")
+    if not all_image_paths:
+        print(f"警告：在 {Config.TRAIN_DIR} 中找不到任何圖片。 সন")
+        return None, None
+
+    print(f"找到 {len(all_image_paths)} 張訓練圖片，開始提取...")
+
+    all_features = []
+    with torch.no_grad():
+        for img_path in tqdm(all_image_paths, desc=f"Extracting features for Epoch {epoch}"):
+            image = np.array(Image.open(img_path).convert("RGB"))
+            tensor_image = transform(image=image)['image'].unsqueeze(0).to(device)
+            features = model.encode(tensor_image)
+            all_features.append(features.squeeze().cpu())
+    
+    stacked_features = torch.stack(all_features)
+    print(f"特徵提取完成。 特徵庫維度: {stacked_features.shape}")
+    return stacked_features, all_image_paths
+
+def cluster_features(features, paths, epoch):
+    """
+    對記憶體中的特徵進行 K-Means 分群並儲存結果。
+    """
+    print("\n--- 步驟 2: 進行 K-Means 分群 (K=15) ---")
+    
+    num_features = features.shape[0]
+    features_flat = features.view(num_features, -1).numpy()
+    
+    print(f"特徵已扁平化，維度: {features_flat.shape}")
+    
+    kmeans = KMeans(n_clusters=15, random_state=Config.SEED, n_init='auto')
+    kmeans.fit(features_flat)
+    
+    print("K-Means 分群完成！")
+    
+    clustering_results = {
+        'image_paths': paths,
+        'cluster_labels': kmeans.labels_,
+        'cluster_centers': kmeans.cluster_centers_,
+    }
+    
+    output_filename = f"clustering_results_epoch_{epoch}.pt"
+    output_path = os.path.join(Config.ROOT_DIR, output_filename)
+    torch.save(clustering_results, output_path)
+    
+    kmeans_model_path = os.path.join(Config.ROOT_DIR, f"kmeans_model_epoch_{epoch}.joblib")
+    joblib.dump(kmeans, kmeans_model_path)
+
+    print("\n======================================================")
+    print(f"成功！已將分群結果儲存至: {output_path}")
+    print(f"K-Means 模型已儲存至: {kmeans_model_path}")
+    print(f"- 共 {len(paths)} 個樣本")
+    print(f"- 分成 {len(np.unique(kmeans.labels_))} 個群組")
+
+def main():
+    """主執行流程"""
+    set_seed(Config.SEED)
+    TARGET_EPOCH = 1
+    device = Config.DEVICE
+
+    # 載入模型
+    model_path = os.path.join(Config.CHECKPOINT_DIR, f'model_epoch_{TARGET_EPOCH}.pth')
+    if not os.path.exists(model_path):
+        print(f"錯誤：找不到模型 '{model_path}'。 সন")
         return
 
-    categories = list(all_feature_data.keys())
-    models = {}
-    for category in tqdm(categories, desc="Loading Models"):
-        model_path = Config.MODEL_SAVE_PATH.format(TARGET_CLASS=category) if category != '地毯' else os.path.join(Config.CHECKPOINT_DIR, 'model_地毯_epoch_15.pth')
-        if not os.path.exists(model_path):
-            print(f"警告：找不到類別 '{category}' 的模型，計分時將無法處理此類別。")
-            continue
-            
-        model = UNetAutoencoder().to(device)
-        model.load_state_dict(torch.load(model_path, map_location=device))
-        model.eval()
-        models[category] = model
-    
-    classify_transform = A.Compose([A.Resize(height=CLASSIFY_IMG_SIZE, width=CLASSIFY_IMG_SIZE), A.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0)), ToTensorV2()])
-    
-    exemplar_tensors = {}
-    exemplar_histograms = {}
-    TEXTURE_CLASSES = ['地毯', '皮革', '木板', '磁磚', '鐵網']
-    for category in tqdm(categories, desc="Loading Exemplars"):
-        try:
-            exemplar_id = Config.CLASS_FILENAME_MAPPING[category][0]
-            exemplar_path = os.path.join(Config.TRAIN_DIR, f"{exemplar_id}.png")
-            if os.path.exists(exemplar_path):
-                image = np.array(Image.open(exemplar_path).convert("RGB"))
-                image_tensor = classify_transform(image=image)['image'].to(device)
-                exemplar_tensors[category] = image_tensor
-                if category in TEXTURE_CLASSES:
-                    exemplar_histograms[category] = calculate_histogram(image_tensor.cpu(), bins=BINS)
-        except IndexError:
-            print(f"警告：類別 '{category}' 在 mapping 中為空。")
+    print(f"正在載入模型: {model_path}")
+    model = UNetAutoencoder().to(device)
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.eval()
 
-    print(f"成功載入 {len(models)} 個模型和 {len(exemplar_tensors)} 個代表圖。")
+    # 步驟 1: 提取特徵
+    features, paths = extract_features(TARGET_EPOCH, model, device)
 
-    # --- Part 2: Initial Classification ---
-    print("\n--- Part 2: Classifying all test images ---")
-    output_root_dir = 'final_classification_results'
-    if os.path.exists(output_root_dir): shutil.rmtree(output_root_dir)
-    
-    classified_images = {category: [] for category in categories}
-    test_image_paths = glob.glob(os.path.join(Config.TEST_DIR, '*.png'))
-
-    for image_path in tqdm(test_image_paths, desc="Stage 1 Classification"):
-        image = np.array(Image.open(image_path).convert("RGB"))
-        image_tensor = classify_transform(image=image)['image'].to(device)
-
-        min_pixel_diff = float('inf')
-        initial_prediction = None
-        for category, exemplar_tensor in exemplar_tensors.items():
-            diff = torch.mean((image_tensor.float() - exemplar_tensor.float())**2).item()
-            if diff < min_pixel_diff:
-                min_pixel_diff = diff
-                initial_prediction = category
-        
-        final_prediction = initial_prediction
-        if initial_prediction in TEXTURE_CLASSES:
-            min_hist_dist = float('inf')
-            test_hist = calculate_histogram(image_tensor.cpu(), bins=BINS)
-            for category, exemplar_hist in exemplar_histograms.items():
-                dist = chi_squared_distance(test_hist, exemplar_hist).item()
-                if dist < min_hist_dist:
-                    min_hist_dist = dist
-                    final_prediction = category
-        
-        if final_prediction:
-            classified_images[final_prediction].append(image_path)
-
-    # --- Part 3 & 4: Scoring, Dynamic Thresholding, and Placement ---
-    print("\n--- Part 3 & 4: Scoring, Thresholding, and Archiving ---")
-    for category, image_paths in classified_images.items():
-        print(f"\nProcessing classified group: [{category}] ({len(image_paths)} images)")
-        normal_dir = os.path.join(output_root_dir, category, 'normal')
-        abnormal_dir = os.path.join(output_root_dir, category, 'abnormal')
-        os.makedirs(normal_dir, exist_ok=True)
-        os.makedirs(abnormal_dir, exist_ok=True)
-
-        if not image_paths or category not in models:
-            print("  -> 跳過 (無圖片或無模型)")
-            continue
-
-        model = models[category]
-        feature_lib = all_feature_data[category]['features'].to(device)
-        
-        scores_for_category = []
-        scoring_transform = A.Compose([A.Resize(height=SCORING_IMG_SIZE, width=SCORING_IMG_SIZE), A.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0)), ToTensorV2()])
-        
-        for image_path in tqdm(image_paths, desc=f"Scoring {category}", leave=False):
-            image = np.array(Image.open(image_path).convert("RGB"))
-            image_tensor = scoring_transform(image=image)['image'].unsqueeze(0).to(device)
-            with torch.no_grad():
-                test_feature = model.encode(image_tensor)
-                distances = torch.sum((test_feature - feature_lib)**2, dim=[1, 2, 3])
-                score = torch.min(distances).item()
-                scores_for_category.append({'path': image_path, 'score': score})
-
-        if len(scores_for_category) < 2:
-            print("  -> 樣本數不足，全部歸為正常。")
-            for item in scores_for_category:
-                shutil.copy(item['path'], normal_dir)
-            continue
-
-        # --- K-Means Clustering ---
-        scores_array = np.array([item['score'] for item in scores_for_category]).reshape(-1, 1)
-        kmeans = KMeans(n_clusters=2, random_state=Config.SEED, n_init='auto').fit(scores_array)
-        
-        # 找出中心點分數較高的那一群作為異常群
-        abnormal_cluster_label = np.argmax(kmeans.cluster_centers_)
-        print(f"  -> K-Means 完成。異常群中心: {kmeans.cluster_centers_[abnormal_cluster_label][0]:.6e}, 正常群中心: {kmeans.cluster_centers_[1 - abnormal_cluster_label][0]:.6e}")
-
-        predicted_labels = kmeans.labels_
-
-        for i, item in enumerate(scores_for_category):
-            if predicted_labels[i] == abnormal_cluster_label:
-                shutil.copy(item['path'], abnormal_dir)
-            else:
-                shutil.copy(item['path'], normal_dir)
-    
-    print("\n\n分析完成！所有圖片已根據預測分類及動態閾值放入對應資料夾。")
+    # 步驟 2: 分群
+    if features is not None and paths is not None:
+        cluster_features(features, paths, TARGET_EPOCH)
 
 if __name__ == "__main__":
-    final_analysis_pipeline()
+    main()

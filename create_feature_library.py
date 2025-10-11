@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import os
+import glob
 from tqdm import tqdm
 from PIL import Image
 
@@ -9,83 +10,77 @@ from UNet_Autoencoder_Model import UNetAutoencoder
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
-def create_all_feature_libraries_with_centers():
+def create_unified_feature_library(epoch):
     """
-    遍歷所有類別，為每個類別載入其最佳模型，並使用100%的正常樣本
-    建立特徵庫。同時計算每個庫的中心點。最終將所有數據
-    （特徵庫 + 中心點）儲存在一個字典檔案中。
+    載入指定 epoch 的統一模型，為所有正常訓練樣本建立一個
+    統一的特徵庫，並將特徵與對應的圖片路徑儲存下來。
     """
     set_seed(Config.SEED)
     device = Config.DEVICE
-    all_data = {} # 改名以更清晰地表示儲存所有數據
-    all_classes = list(Config.CLASS_FILENAME_MAPPING.keys())
 
-    print(f"開始建立所有 {len(all_classes)} 個類別的特徵庫及中心點...")
+    print(f"為 Epoch {epoch} 建立統一特徵庫...")
     print("======================================================")
 
-    for category in all_classes:
-        print(f"\nProcessing Category: [{category}]")
-        print("----------------------------------------------------")
+    # 1. 載入指定 epoch 的模型
+    model_path = os.path.join(Config.CHECKPOINT_DIR, f'model_epoch_{epoch}.pth')
+    if not os.path.exists(model_path):
+        print(f"錯誤：找不到模型 '{model_path}'，請確認權重檔案是否存在。")
+        return
 
-        # 1. 載入該類別的最佳模型
-        if category == '地毯': # 地毯是手動挑選的特例
-            model_path = os.path.join(Config.CHECKPOINT_DIR, 'model_地毯_epoch_15.pth')
-        else:
-            model_path = Config.MODEL_SAVE_PATH.format(TARGET_CLASS=category)
+    print(f"正在載入模型: {model_path}")
+    model = UNetAutoencoder().to(device)
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.eval()
 
-        if not os.path.exists(model_path):
-            print(f"警告：找不到模型 '{model_path}'，已跳過此類別。")
-            continue
+    # 2. 準備影像轉換和所有訓練圖片的路徑
+    transform = A.Compose([
+        A.Resize(height=Config.IMG_SIZE, width=Config.IMG_SIZE),
+        A.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0)),
+        ToTensorV2(),
+    ])
+    
+    # 使用全部的訓練資料來建立完整的特徵庫
+    all_image_paths = sorted(glob.glob(os.path.join(Config.TRAIN_DIR, "*.png")), key=lambda x: int(os.path.splitext(os.path.basename(x))[0]))
 
-        print(f"正在載入模型: {model_path}")
-        model = UNetAutoencoder().to(device)
-        model.load_state_dict(torch.load(model_path, map_location=device))
-        model.eval()
+    if not all_image_paths:
+        print(f"警告：在 {Config.TRAIN_DIR} 中找不到任何圖片。")
+        return
 
-        # 2. 準備影像轉換和該類別的全部圖片路徑
-        transform = A.Compose([
-            A.Resize(height=Config.IMG_SIZE, width=Config.IMG_SIZE),
-            A.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0)),
-            ToTensorV2(),
-        ])
-        
-        file_ids = Config.CLASS_FILENAME_MAPPING.get(category, [])
-        image_paths = [os.path.join(Config.TRAIN_DIR, f"{fid}.png") for fid in file_ids]
-        
-        if not image_paths:
-            print(f"警告：找不到 '{category}' 的任何圖片，已跳過。")
-            continue
+    print(f"找到 {len(all_image_paths)} 張訓練圖片，開始提取特徵...")
 
-        print(f"找到 {len(image_paths)} 張 '{category}' 類別的圖片，開始提取特徵...")
-
-        # 3. 提取所有圖片的特徵
-        category_features = []
-        with torch.no_grad():
-            for img_path in tqdm(image_paths, desc=f"Extracting {category}"):
-                if not os.path.exists(img_path): continue
-                image = np.array(Image.open(img_path).convert("RGB"))
-                tensor_image = transform(image=image)['image'].unsqueeze(0).to(device)
-                features = model.encode(tensor_image)
-                category_features.append(features.squeeze().cpu())
-        
-        # 4. 建立特徵庫並計算中心點
-        if category_features:
-            stacked_features = torch.stack(category_features)
-            center_feature = torch.mean(stacked_features, dim=0)
+    # 3. 提取所有圖片的特徵
+    all_features = []
+    all_paths = []
+    with torch.no_grad():
+        for img_path in tqdm(all_image_paths, desc=f"Extracting features for Epoch {epoch}"):
+            if not os.path.exists(img_path): continue
             
-            all_data[category] = {
-                'features': stacked_features,
-                'center': center_feature
-            }
-            print(f"'{category}' 特徵庫建立完成，維度: {stacked_features.shape}")
-            print(f"'{category}' 中心點計算完成，維度: {center_feature.shape}")
-
-    # 5. 儲存整個字典
-    if all_data:
-        output_path = "feature_libraries_all.pt"
-        torch.save(all_data, output_path)
+            image = np.array(Image.open(img_path).convert("RGB"))
+            tensor_image = transform(image=image)['image'].unsqueeze(0).to(device)
+            
+            features = model.encode(tensor_image)
+            
+            all_features.append(features.squeeze().cpu())
+            all_paths.append(img_path)
+    
+    # 4. 儲存整個特徵庫
+    if all_features:
+        stacked_features = torch.stack(all_features)
+        
+        feature_library = {
+            'paths': all_paths,
+            'features': stacked_features
+        }
+        
+        output_filename = f"feature_library_epoch_{epoch}.pt"
+        output_path = os.path.join(Config.ROOT_DIR, output_filename)
+        torch.save(feature_library, output_path)
+        
         print("\n======================================================")
-        print(f"成功！已將 {len(all_data)} 個類別的特徵庫及中心點儲存至: {output_path}")
+        print(f"成功！已將 {len(all_paths)} 個特徵向量儲存至: {output_path}")
+        print(f"特徵庫維度: {stacked_features.shape}")
 
 if __name__ == "__main__":
-    create_all_feature_libraries_with_centers()
+    # 根據視覺化分析，只有 Epoch 1 的模型有學到東西
+    TARGET_EPOCH = 1 
+    create_unified_feature_library(TARGET_EPOCH)

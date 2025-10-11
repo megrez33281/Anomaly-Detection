@@ -83,8 +83,9 @@ if __name__ == "__main__":
                 outputs = model(inputs)
 
                 # 用設定好的Loss Function作為anomaly 分數
-                batch_loss = criterion(outputs, inputs, reduction='mean')
-                val_loss += batch_loss.item()
+                # Change reduction to 'none' to get per-image scores
+                batch_scores = criterion(outputs, inputs, reduction='none').cpu().numpy()
+                val_loss += batch_scores.mean() # Use mean here only for tracking average batch loss
 
                 # 如果還是 Tensor，就在這裡聚合成 per-image scalar
                 if isinstance(batch_scores, torch.Tensor):
@@ -92,7 +93,7 @@ if __name__ == "__main__":
                         batch_scores = batch_scores.view(batch_scores.size(0), -1).mean(dim=1)
                     batch_scores_np = batch_scores.detach().cpu().numpy()
                 else:
-                    # 已經是 NumPy 陣列的情況（理論上不該發生，但保險）
+                    # 已經是 NumPy 陣列的情況（理论上不该发生，但保险）
                     batch_scores_np = batch_scores
 
                 val_scores.extend(batch_scores_np)

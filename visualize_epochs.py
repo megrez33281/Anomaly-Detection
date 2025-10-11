@@ -20,10 +20,7 @@ def visualize_epoch_reconstruction():
     # 1. 找到所有 epoch 權重檔案
     checkpoint_dir = Config.CHECKPOINT_DIR
     # 排序權重檔案，確保按 epoch 1, 2, 3... 的順序處理
-    checkpoints = sorted(
-        glob.glob(os.path.join(checkpoint_dir, "*.pth")), 
-        key=lambda x: int(os.path.splitext(os.path.basename(x).split('_')[-1])[0])
-    )
+    checkpoints = [os.path.join(checkpoint_dir, "model_epoch_1.pth")]
     
     if not checkpoints:
         print(f"錯誤：在 '{checkpoint_dir}' 中找不到任何權重檔案。")
@@ -35,7 +32,7 @@ def visualize_epoch_reconstruction():
         A.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0)),
         ToTensorV2(),
     ])
-    image_ids = ['1512', '1144', '832', '640', '1700', '97']
+    image_ids = ['998', '432', '1540']
     test_dir = Config.TEST_DIR
     image_paths = [os.path.join(test_dir, f"{id}.png") for id in image_ids]
 
