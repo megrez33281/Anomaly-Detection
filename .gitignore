@@ -2,4 +2,6 @@ Dataset
 venv
 __pycache__
 *.pth
+*.pt
 epoch_checkpoints
+*.joblib

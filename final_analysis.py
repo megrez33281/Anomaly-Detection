@@ -6,6 +6,7 @@ from tqdm import tqdm
 from PIL import Image
 from sklearn.cluster import KMeans
 import joblib
+import argparse
 
 from Config import Config, set_seed
 from UNet_Autoencoder_Model import UNetAutoencoder
@@ -19,16 +20,17 @@ def extract_features(epoch, model, device):
     """
     print(f"--- 步驟 1: 為 Epoch {epoch} 提取特徵 ---")
     
+    # 修正標準化參數以匹配模型訓練時的設定
     transform = A.Compose([
         A.Resize(height=Config.IMG_SIZE, width=Config.IMG_SIZE),
-        A.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0)),
+        A.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
         ToTensorV2(),
     ])
     
     all_image_paths = sorted(glob.glob(os.path.join(Config.TRAIN_DIR, "*.png")), key=lambda x: int(os.path.splitext(os.path.basename(x))[0]))
 
     if not all_image_paths:
-        print(f"警告：在 {Config.TRAIN_DIR} 中找不到任何圖片。 সন")
+        print(f"警告：在 {Config.TRAIN_DIR} 中找不到任何圖片。")
         return None, None
 
     print(f"找到 {len(all_image_paths)} 張訓練圖片，開始提取...")
@@ -82,8 +84,12 @@ def cluster_features(features, paths, epoch):
 
 def main():
     """主執行流程"""
+    parser = argparse.ArgumentParser(description="Extract features and run clustering for a given epoch.")
+    parser.add_argument("epoch", type=int, help="The epoch number of the model to use.")
+    args = parser.parse_args()
+
     set_seed(Config.SEED)
-    TARGET_EPOCH = 1
+    TARGET_EPOCH = args.epoch
     device = Config.DEVICE
 
     # 載入模型
@@ -93,8 +99,16 @@ def main():
         return
 
     print(f"正在載入模型: {model_path}")
+    # 腳本會從 UNet_Autoencoder_Model.py 導入當前的模型架構
+    # 我們已確認該檔案是正確的 2-layer 版本
     model = UNetAutoencoder().to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
+    try:
+        model.load_state_dict(torch.load(model_path, map_location=device))
+    except Exception as e:
+        print(f"載入模型權重時發生錯誤: {e}")
+        print("請確認 UNet_Autoencoder_Model.py 中的架構與儲存的權重相符。 সন")
+        return
+        
     model.eval()
 
     # 步驟 1: 提取特徵
