@@ -1,3 +1,4 @@
+"""用於使用模型權重為圖片建立特徵庫"""
 import torch
 import numpy as np
 import os
@@ -82,5 +83,5 @@ def create_unified_feature_library(epoch):
 
 if __name__ == "__main__":
     # 根據視覺化分析，只有 Epoch 1 的模型有學到東西
-    TARGET_EPOCH = 1 
+    TARGET_EPOCH = 5
     create_unified_feature_library(TARGET_EPOCH)

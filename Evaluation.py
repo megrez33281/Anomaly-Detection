@@ -26,7 +26,7 @@ class CutPaste(object):
         return image
 
 # ============================================================
-# SSIM + L1 Combined Loss
+# SSIM + L2 (MSE) Combined Loss
 # ============================================================
 def ssim(img1, img2, window, window_size, channel, size_average=True):
     C1 = 0.01**2
@@ -46,8 +46,9 @@ def ssim(img1, img2, window, window_size, channel, size_average=True):
         return ssim_map.mean([1, 2, 3])
 
 class CombinedLoss(nn.Module):
-    def __init__(self, ssim_weight):
+    def __init__(self, ssim_weight=0.8):
         super().__init__()
+        self.mse = nn.MSELoss(reduction='none')
         self.ssim_weight = ssim_weight
         self.window_size = 11
         self.window = None
@@ -59,7 +60,7 @@ class CombinedLoss(nn.Module):
         return window.to(device)
 
     def forward(self, recon, target, reduction='mean'):
-        l1_loss = F.l1_loss(recon, target, reduction='none')
+        mse_loss = self.mse(recon, target)
 
         if self.ssim_weight > 0:
             if (self.window is None) or (self.window.device != recon.device) or (self.window.size(0) != recon.size(1)):
@@ -68,9 +69,9 @@ class CombinedLoss(nn.Module):
             ssim_val = ssim(recon, target, window=self.window, window_size=self.window_size, channel=recon.size(1), size_average=False)
             ssim_loss = 1 - ssim_val
             ssim_loss = ssim_loss.view(-1, 1, 1, 1)
-            total_loss = (1 - self.ssim_weight) * l1_loss + self.ssim_weight * ssim_loss
+            total_loss = (1 - self.ssim_weight) * mse_loss + self.ssim_weight * ssim_loss
         else:
-            total_loss = l1_loss
+            total_loss = mse_loss
 
         if reduction == 'mean':
             return total_loss.mean()
