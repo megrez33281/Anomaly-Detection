@@ -95,7 +95,7 @@ def main():
     # 載入模型
     model_path = os.path.join(Config.CHECKPOINT_DIR, f'model_epoch_{TARGET_EPOCH}.pth')
     if not os.path.exists(model_path):
-        print(f"錯誤：找不到模型 '{model_path}'。 সন")
+        print(f"錯誤：找不到模型 '{model_path}'。")
         return
 
     print(f"正在載入模型: {model_path}")

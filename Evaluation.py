@@ -5,13 +5,11 @@ import torch.nn as nn
 import torch
 import numpy as np
 import albumentations as A
-from PerceptualLoss import VGGPerceptualLoss
 
 # -----------------------------
-# CutPaste製作異常資料
+# CutPaste Augmentation
 # -----------------------------
 class CutPaste(object):
-    """實作 CutPaste 增強：隨機剪下一塊貼回其他區域，模擬瑕疵圖片"""
     def __init__(self, patch_size_ratio_range=(0.05, 0.15)):
         self.patch_size_ratio_range = patch_size_ratio_range
 
@@ -27,52 +25,56 @@ class CutPaste(object):
         image.paste(patch, (dest_x, dest_y))
         return image
 
-class TextureDamage(object):
-    """實作紋理破壞增強：使用 CoarseDropout 在圖像上挖洞，模擬紋理瑕疵"""
-    def __init__(self):
-        self.transform = A.Compose([
-            A.CoarseDropout(
-                num_holes_range=(10, 20),
-                hole_height_range=(0.05, 0.1),
-                hole_width_range=(0.05, 0.1),
-                fill=0,
-                p=1.0
-            )
-        ])
-
-    def __call__(self, image):
-        np_image = np.array(image)
-        augmented_image = self.transform(image=np_image)['image']
-        return Image.fromarray(augmented_image)
-
 # ============================================================
-# New Combined Loss: L1 + Perceptual
+# SSIM + L1 Combined Loss
 # ============================================================
+def ssim(img1, img2, window, window_size, channel, size_average=True):
+    C1 = 0.01**2
+    C2 = 0.03**2
+    mu1 = F.conv2d(img1, window, padding=window_size//2, groups=channel)
+    mu2 = F.conv2d(img2, window, padding=window_size//2, groups=channel)
+    mu1_sq = mu1.pow(2)
+    mu2_sq = mu2.pow(2)
+    mu1_mu2 = mu1 * mu2
+    sigma1_sq = F.conv2d(img1 * img1, window, padding=window_size//2, groups=channel) - mu1_sq
+    sigma2_sq = F.conv2d(img2 * img2, window, padding=window_size//2, groups=channel) - mu2_sq
+    sigma12 = F.conv2d(img1 * img2, window, padding=window_size//2, groups=channel) - mu1_mu2
+    ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
+    if size_average:
+        return ssim_map.mean()
+    else:
+        return ssim_map.mean([1, 2, 3])
+
 class CombinedLoss(nn.Module):
-    """結合L1損失和VGG感知損失"""
-    def __init__(self, perceptual_weight=1.0):
+    def __init__(self, ssim_weight):
         super().__init__()
-        self.perceptual_weight = perceptual_weight
-        # 將感知損失模組實例化，並移到對應的device
-        self.perceptual_loss = VGGPerceptualLoss().to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+        self.ssim_weight = ssim_weight
+        self.window_size = 11
+        self.window = None
+
+    def create_window(self, window_size, channel, device):
+        _1D_window = torch.exp(-(torch.arange(window_size) - window_size // 2)**2 / (2 * 1.5**2)).float()
+        _2D_window = _1D_window.unsqueeze(1) @ _1D_window.unsqueeze(0)
+        window = _2D_window.expand(channel, 1, window_size, window_size).contiguous()
+        return window.to(device)
 
     def forward(self, recon, target, reduction='mean'):
-        # L1 Loss (Pixel-level)
         l1_loss = F.l1_loss(recon, target, reduction='none')
 
-        # Perceptual Loss (Feature-level)
-        p_loss = self.perceptual_loss(recon, target)
-        
-        # p_loss 的輸出維度是 [batch_size]，需要擴展以匹配 l1_loss 的 [batch, C, H, W]
-        p_loss = p_loss.view(-1, 1, 1, 1)
-
-        # Combine losses
-        total_loss = l1_loss + self.perceptual_weight * p_loss
+        if self.ssim_weight > 0:
+            if (self.window is None) or (self.window.device != recon.device) or (self.window.size(0) != recon.size(1)):
+                self.window = self.create_window(self.window_size, recon.size(1), recon.device)
+            
+            ssim_val = ssim(recon, target, window=self.window, window_size=self.window_size, channel=recon.size(1), size_average=False)
+            ssim_loss = 1 - ssim_val
+            ssim_loss = ssim_loss.view(-1, 1, 1, 1)
+            total_loss = (1 - self.ssim_weight) * l1_loss + self.ssim_weight * ssim_loss
+        else:
+            total_loss = l1_loss
 
         if reduction == 'mean':
             return total_loss.mean()
         elif reduction == 'none':
-            # 為驗證返回每個圖像的分數
             return total_loss.view(total_loss.size(0), -1).mean(dim=1)
         else:
             raise ValueError(f"Unsupported reduction type: {reduction}")

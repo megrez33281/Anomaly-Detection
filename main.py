@@ -29,7 +29,7 @@ if __name__ == "__main__":
     model = UNetAutoencoder().to(Config.DEVICE)
     model.init_weights()
     optimizer = optim.Adam(model.parameters(), lr=Config.LEARNING_RATE, weight_decay=Config.WEIGHT_DECAY)
-    criterion = CombinedLoss(perceptual_weight=1.0).to(Config.DEVICE)
+    criterion = CombinedLoss(ssim_weight=Config.SSIM_WEIGHT).to(Config.DEVICE)
 
 
     # --- 訓練與驗證流程 ---

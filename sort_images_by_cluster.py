@@ -9,7 +9,7 @@ def sort_images_by_cluster():
     """
     根據分群結果，將訓練圖片複製到對應類別的資料夾中。
     """
-    TARGET_EPOCH = 10 # 我們使用第10個epoch的結果
+    TARGET_EPOCH = 5 # 我們使用第5個epoch的結果
     
     results_path = os.path.join(Config.ROOT_DIR, f'clustering_results_epoch_{TARGET_EPOCH}.pt')
     mapping_path = os.path.join(Config.ROOT_DIR, 'cluster_to_class_mapping.pt')

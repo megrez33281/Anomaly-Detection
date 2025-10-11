@@ -42,10 +42,10 @@ class Config:
     BATCH_SIZE = 16
     LEARNING_RATE = 1e-4
     WEIGHT_DECAY = 1e-5
-    EPOCHS = 10             
+    EPOCHS = 5         
     
     # 損失函數權重 (SSIM + MSE)
-    SSIM_WEIGHT = 0.1
+    SSIM_WEIGHT = 0
 
 
     # 類別與檔名對應關係

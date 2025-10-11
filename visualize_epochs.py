@@ -35,7 +35,7 @@ def visualize_epoch_reconstruction():
         A.Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0)),
         ToTensorV2(),
     ])
-    image_ids = ['998', '432', '1540']
+    image_ids = ['22', '31', '3', '28', '1512']
     test_dir = Config.TEST_DIR
     image_paths = [os.path.join(test_dir, f"{id}.png") for id in image_ids]
 
